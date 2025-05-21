@@ -100,10 +100,6 @@
           "type": "boolean",
           "title": "Draft"
         },
-        "merged": {
-          "type": "boolean",
-          "title": "Merged"
-        },
         "mergeable": {
           "type": "boolean",
           "title": "Mergeable"
@@ -207,14 +203,6 @@
         "url": {
           "type": "string",
           "title": "URL"
-        },
-        "members_count": {
-          "type": "number",
-          "title": "Members Count"
-        },
-        "repos_count": {
-          "type": "number",
-          "title": "Repos Count"
         }
       },
       "required": []

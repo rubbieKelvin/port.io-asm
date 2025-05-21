@@ -56,7 +56,6 @@ resources:
             repository: .repository
             author: .author
             draft: .draft
-            merged: .merged
             mergeable: .mergeable
             mergeable_state: .mergeable_state
 
@@ -98,8 +97,6 @@ resources:
             description: .description
             privacy: .privacy
             url: .url
-            members_count: .members_count
-            repos_count: .repos_count
 
   - kind: Workflow
     selector:

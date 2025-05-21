@@ -2,7 +2,7 @@ import os
 import typing as t
 import dotenv
 import logging
-from github import GithubClient
+from github.client import GithubClient
 from port_ocean.context.ocean import ocean
 
 # Configure logging
@@ -17,9 +17,15 @@ dotenv.load_dotenv()
 @ocean.on_resync("Repository")
 async def resync_repository(kind: str) -> list[dict[str, t.Any]]:
     logger.info(f"Starting repository resync for kind: {kind}")
-    handler = GithubClient.from_env()
 
-    repositories = await handler.get_repositories()
+    handler = GithubClient.from_env()
+    
+    try:
+        repositories = await handler.get_repositories()
+    except Exception as e:
+        logger.error(f"Failed to fetch repositories: {str(e)}")
+        return []
+
     logger.info(f"Retrieved {len(repositories)} repositories")
 
     result = [
@@ -45,74 +51,114 @@ async def resync_repository(kind: str) -> list[dict[str, t.Any]]:
 @ocean.on_resync("PullRequest")
 async def resync_pull_requests(kind: str) -> list[dict[str, t.Any]]:
     logger.info(f"Starting pull request resync for kind: {kind}")
-    handler = GithubClient.from_env()
 
-    repositories = await handler.get_repositories()
+    handler = GithubClient.from_env()
+    
+    try:
+        repositories = await handler.get_repositories()
+    except Exception as e:
+        logger.error(f"Failed to fetch repositories: {str(e)}")
+        return []
+
     logger.info(f"Retrieved {len(repositories)} repositories for PR sync")
     all_prs = []
 
     for repo in repositories:
-        owner, repo_name = repo["full_name"].split("/")
-        logger.info(f"Fetching PRs for repository: {repo_name}")
-        prs = await handler.get_pull_requests(owner, repo_name)
-        logger.info(f"Retrieved {len(prs)} PRs for {repo_name}")
-        all_prs.extend(
-            [
-                {
-                    "id": str(pr["id"]),
-                    "number": pr["number"],
-                    "title": pr["title"],
-                    "state": pr["state"],
-                    "url": pr["html_url"],
-                    "created_at": pr["created_at"],
-                    "updated_at": pr["updated_at"],
-                    "repository": repo["full_name"],
-                    "author": pr["user"]["login"],
-                    "draft": pr["draft"],
-                    "merged": pr["merged"],
-                    "mergeable": pr["mergeable"],
-                    "mergeable_state": pr["mergeable_state"],
-                }
-                for pr in prs
-            ]
-        )
+        try:
+            owner, repo_name = repo["full_name"].split("/")
+            logger.info(f"Fetching PRs for repository: {repo_name}")
+            prs = await handler.get_pull_requests(owner, repo_name)
+            logger.info(f"Retrieved {len(prs)} PRs for {repo_name}")
 
-    logger.info(f"Processed total of {len(all_prs)} pull requests")
+            # Log PR statistics
+            open_prs = sum(1 for pr in prs if pr["state"] == "open")
+            closed_prs = sum(1 for pr in prs if pr["state"] == "closed")
+            draft_prs = sum(1 for pr in prs if pr.get("draft", False))
+
+            logger.info(
+                f"PR statistics for {repo_name}: "
+                f"Open: {open_prs}, Closed: {closed_prs}, Draft: {draft_prs}"
+            )
+
+            all_prs.extend(
+                [
+                    {
+                        "id": str(pr["id"]),
+                        "number": pr["number"],
+                        "title": pr["title"],
+                        "state": pr["state"],
+                        "url": pr["html_url"],
+                        "created_at": pr["created_at"],
+                        "updated_at": pr["updated_at"],
+                        "repository": repo["full_name"],
+                        "author": pr["user"]["login"],
+                        "draft": pr.get("draft", False),
+                        "mergeable": pr.get("mergeable", False),
+                        "mergeable_state": pr.get("mergeable_state", ""),
+                    }
+                    for pr in prs
+                ]
+            )
+        except Exception as e:
+            logger.warning(
+                f"Failed to process repository {repo.get('full_name', 'unknown')}: {str(e)}"
+            )
+            continue
+
+    logger.info(
+        f"Completed PR sync. Total PRs processed: {len(all_prs)} "
+        f"across {len(repositories)} repositories"
+    )
     return all_prs
 
 
 @ocean.on_resync("Issue")
 async def resync_issues(kind: str) -> list[dict[str, t.Any]]:
     logger.info(f"Starting issue resync for kind: {kind}")
-    handler = GithubClient.from_env()
 
-    repositories = await handler.get_repositories()
+    handler = GithubClient.from_env()
+    
+    try:
+        repositories = await handler.get_repositories()
+    except Exception as e:
+        logger.error(f"Failed to fetch repositories: {str(e)}")
+        return []
+
     logger.info(f"Retrieved {len(repositories)} repositories for issue sync")
     all_issues = []
 
     for repo in repositories:
-        owner, repo_name = repo["full_name"].split("/")
-        logger.info(f"Fetching issues for repository: {repo_name}")
-        issues = await handler.get_issues(owner, repo_name)
-        logger.info(f"Retrieved {len(issues)} issues for {repo_name}")
-        all_issues.extend(
-            [
-                {
-                    "id": str(issue["id"]),
-                    "number": issue["number"],
-                    "title": issue["title"],
-                    "state": issue["state"],
-                    "url": issue["html_url"],
-                    "created_at": issue["created_at"],
-                    "updated_at": issue["updated_at"],
-                    "repository": repo["full_name"],
-                    "author": issue["user"]["login"],
-                    "labels": [label["name"] for label in issue["labels"]],
-                    "assignees": [assignee["login"] for assignee in issue["assignees"]],
-                }
-                for issue in issues
-            ]
-        )
+        try:
+            owner, repo_name = repo["full_name"].split("/")
+            logger.info(f"Fetching issues for repository: {repo_name}")
+            issues = await handler.get_issues(owner, repo_name)
+            logger.info(f"Retrieved {len(issues)} issues for {repo_name}")
+
+            all_issues.extend(
+                [
+                    {
+                        "id": str(issue["id"]),
+                        "number": issue["number"],
+                        "title": issue["title"],
+                        "state": issue["state"],
+                        "url": issue["html_url"],
+                        "created_at": issue["created_at"],
+                        "updated_at": issue["updated_at"],
+                        "repository": repo["full_name"],
+                        "author": issue["user"]["login"],
+                        "labels": [label["name"] for label in issue["labels"]],
+                        "assignees": [
+                            assignee["login"] for assignee in issue["assignees"]
+                        ],
+                    }
+                    for issue in issues
+                ]
+            )
+        except Exception as e:
+            logger.warning(
+                f"Failed to process repository {repo.get('full_name', 'unknown')}: {str(e)}"
+            )
+            continue
 
     logger.info(f"Processed total of {len(all_issues)} issues")
     return all_issues
@@ -121,15 +167,20 @@ async def resync_issues(kind: str) -> list[dict[str, t.Any]]:
 @ocean.on_resync("Team")
 async def resync_teams(kind: str) -> list[dict[str, t.Any]]:
     logger.info(f"Starting team resync for kind: {kind}")
-    handler = GithubClient.from_env()
 
+    handler = GithubClient.from_env()
     org = os.getenv("GITHUB_ORG")
     if not org:
-        logger.debug("GITHUB_ORG is not set. Returning empty list.")
+        logger.warning("GITHUB_ORG is not set, returning empty list")
         return []
 
-    logger.info(f"Fetching teams for organization: {org}")
-    teams = await handler.get_teams(org)
+    try:
+        logger.info(f"Fetching teams for organization: {org}")
+        teams = await handler.get_teams(org)
+    except Exception as e:
+        logger.error(f"Failed to fetch teams: {str(e)}")
+        return []
+
     logger.info(f"Retrieved {len(teams)} teams")
 
     result = [
@@ -140,8 +191,6 @@ async def resync_teams(kind: str) -> list[dict[str, t.Any]]:
             "description": team["description"],
             "privacy": team["privacy"],
             "url": team["html_url"],
-            "members_count": team["members_count"],
-            "repos_count": team["repos_count"],
         }
         for team in teams
     ]
@@ -152,39 +201,50 @@ async def resync_teams(kind: str) -> list[dict[str, t.Any]]:
 @ocean.on_resync("Workflow")
 async def resync_workflows(kind: str) -> list[dict[str, t.Any]]:
     logger.info(f"Starting workflow resync for kind: {kind}")
-    handler = GithubClient.from_env()
 
-    repositories = await handler.get_repositories()
+    handler = GithubClient.from_env()
+    
+    try:
+        repositories = await handler.get_repositories()
+    except Exception as e:
+        logger.error(f"Failed to fetch repositories: {str(e)}")
+        return []
+
     logger.info(f"Retrieved {len(repositories)} repositories for workflow sync")
     all_workflows = []
 
     for repo in repositories:
-        owner, repo_name = repo["full_name"].split("/")
-        logger.info(f"Fetching workflows for repository: {repo_name}")
-        workflows = await handler.get_workflows(owner, repo_name)
-        logger.info(f"Retrieved {len(workflows)} workflows for {repo_name}")
-        all_workflows.extend(
-            [
-                {
-                    "id": str(workflow["id"]),
-                    "name": workflow["name"],
-                    "path": workflow["path"],
-                    "state": workflow["state"],
-                    "url": workflow["html_url"],
-                    "created_at": workflow["created_at"],
-                    "updated_at": workflow["updated_at"],
-                    "repository": repo["full_name"],
-                }
-                for workflow in workflows
-            ]
-        )
+        try:
+            owner, repo_name = repo["full_name"].split("/")
+            logger.info(f"Fetching workflows for repository: {repo_name}")
+            workflows = await handler.get_workflows(owner, repo_name)
+            logger.info(f"Retrieved {len(workflows)} workflows for {repo_name}")
+
+            all_workflows.extend(
+                [
+                    {
+                        "id": str(workflow["id"]),
+                        "name": workflow["name"],
+                        "path": workflow["path"],
+                        "state": workflow["state"],
+                        "url": workflow["html_url"],
+                        "created_at": workflow["created_at"],
+                        "updated_at": workflow["updated_at"],
+                        "repository": repo["full_name"],
+                    }
+                    for workflow in workflows
+                ]
+            )
+        except Exception as e:
+            logger.warning(
+                f"Failed to process repository {repo.get('full_name', 'unknown')}: {str(e)}"
+            )
+            continue
 
     logger.info(f"Processed total of {len(all_workflows)} workflows")
     return all_workflows
 
 
-# Optional
-# Listen to the start event of the integration. Called once when the integration starts.
 @ocean.on_start()
 async def on_start() -> None:
     logger.info("Starting ghoceanport integration")
