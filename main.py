@@ -70,7 +70,6 @@ async def resync_pull_requests(
         return
 
     logger.info(f"Retrieved {len(repositories)} repositories for PR sync")
-    all_prs = []
 
     for repo in repositories:
         try:
@@ -89,39 +88,34 @@ async def resync_pull_requests(
                 f"Open: {open_prs}, Closed: {closed_prs}, Draft: {draft_prs}"
             )
 
-            all_prs.extend(
-                [
-                    {
-                        "id": str(pr["id"]),
-                        "number": pr["number"],
-                        "title": pr["title"],
-                        "state": pr["state"],
-                        "url": pr["html_url"],
-                        "created_at": pr["created_at"],
-                        "updated_at": pr["updated_at"],
-                        "repository": repo["full_name"],
-                        "author": pr["user"]["login"],
-                        "draft": pr.get("draft", False),
-                        "mergeable": pr.get("mergeable", False),
-                        "mergeable_state": pr.get("mergeable_state", ""),
-                    }
-                    for pr in prs
-                ]
-            )
+            # Process PRs in batches
+            processed_prs = [
+                {
+                    "id": str(pr["id"]),
+                    "number": pr["number"],
+                    "title": pr["title"],
+                    "state": pr["state"],
+                    "url": pr["html_url"],
+                    "created_at": pr["created_at"],
+                    "updated_at": pr["updated_at"],
+                    "repository": repo["full_name"],
+                    "author": pr["user"]["login"],
+                    "draft": pr.get("draft", False),
+                    "mergeable": pr.get("mergeable", False),
+                    "mergeable_state": pr.get("mergeable_state", ""),
+                }
+                for pr in prs
+            ]
+
+            # Yield PRs in batches
+            for i in range(0, len(processed_prs), MAX_BATCH_SIZE):
+                yield processed_prs[i : i + MAX_BATCH_SIZE]
+
         except Exception as e:
             logger.warning(
                 f"Failed to process repository {repo.get('full_name', 'unknown')}: {str(e)}"
             )
             continue
-
-    logger.info(
-        f"Completed PR sync. Total PRs processed: {len(all_prs)} "
-        f"across {len(repositories)} repositories"
-    )
-
-    # Yield PRs in batches
-    for i in range(0, len(all_prs), MAX_BATCH_SIZE):
-        yield all_prs[i : i + MAX_BATCH_SIZE]
 
 
 @ocean.on_resync("Issue")
