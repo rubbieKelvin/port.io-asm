@@ -8,6 +8,7 @@ authors = ["rubbie kelvin <dev.rubbie@gmail.com>"]
 python = "^3.13"
 port_ocean = { version = "^0.22.10", extras = ["cli"] }
 dotenv = "^0.9.9"
+pytest-mock = "^3.14.0"
 
 [tool.poetry.group.dev.dependencies]
 # Uncomment this if you want to debug the ocean core together with your integration

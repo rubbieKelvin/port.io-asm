@@ -132,7 +132,7 @@ class GithubClient:
         """
         Makes a request to the GitHub API with error handling, retries, and rate limit awareness.
         """
-        # NOTE: i'm not handling list pagination here
+        # i'm not handling list pagination here
 
         url = f"{self.base_url}/{path.lstrip('/')}"
 
@@ -399,9 +399,9 @@ class GithubClient:
                     f"Received no or malformed workflow data for {owner}/{repo}, returning empty list."
                 )
                 return []
-            workflows = data.get(
-                "workflows", []
-            )  # data.get already handles if 'workflows' is missing
+
+            # data.get already handles if 'workflows' is missing
+            workflows = data.get("workflows", [])
             logger.info(
                 f"Successfully retrieved {len(workflows)} workflows for {owner}/{repo} (first page)"
             )

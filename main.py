@@ -13,39 +13,45 @@ logger = logging.getLogger(__name__)
 
 dotenv.load_dotenv()
 
+MAX_BATCH_SIZE = 100
+
 
 @ocean.on_resync("Repository")
-async def resync_repository(kind: str) -> list[dict[str, t.Any]]:
+async def resync_repository(
+    kind: str,
+) -> t.AsyncGenerator[list[dict[str, t.Any]], None]:
     logger.info(f"Starting repository resync for kind: {kind}")
 
     handler = GithubClient.from_env()
-    
+
     try:
         repositories = await handler.get_repositories()
     except Exception as e:
         logger.error(f"Failed to fetch repositories: {str(e)}")
-        return []
+        return
 
     logger.info(f"Retrieved {len(repositories)} repositories")
 
-    result = [
-        {
-            "id": str(r["id"]),
-            "name": r["name"],
-            "full_name": r["full_name"],
-            "private": r["private"],
-            "url": r["html_url"],
-            "fork": r["fork"],
-            "created_at": r["created_at"],
-            "updated_at": r["updated_at"],
-            "pushed_at": r["pushed_at"],
-            "size": r["size"],
-            "stargazers_count": r["stargazers_count"],
-        }
-        for r in repositories
-    ]
-    logger.info(f"Processed {len(result)} repositories")
-    return result
+    repository_count = len(repositories)
+    for i in range(0, repository_count, MAX_BATCH_SIZE):
+        batch = repositories[i : i + MAX_BATCH_SIZE]
+
+        yield [
+            {
+                "id": str(r["id"]),
+                "name": r["name"],
+                "full_name": r["full_name"],
+                "private": r["private"],
+                "url": r["html_url"],
+                "fork": r["fork"],
+                "created_at": r["created_at"],
+                "updated_at": r["updated_at"],
+                "pushed_at": r["pushed_at"],
+                "size": r["size"],
+                "stargazers_count": r["stargazers_count"],
+            }
+            for r in batch
+        ]
 
 
 @ocean.on_resync("PullRequest")
@@ -53,7 +59,7 @@ async def resync_pull_requests(kind: str) -> list[dict[str, t.Any]]:
     logger.info(f"Starting pull request resync for kind: {kind}")
 
     handler = GithubClient.from_env()
-    
+
     try:
         repositories = await handler.get_repositories()
     except Exception as e:
@@ -117,7 +123,7 @@ async def resync_issues(kind: str) -> list[dict[str, t.Any]]:
     logger.info(f"Starting issue resync for kind: {kind}")
 
     handler = GithubClient.from_env()
-    
+
     try:
         repositories = await handler.get_repositories()
     except Exception as e:
@@ -203,7 +209,7 @@ async def resync_workflows(kind: str) -> list[dict[str, t.Any]]:
     logger.info(f"Starting workflow resync for kind: {kind}")
 
     handler = GithubClient.from_env()
-    
+
     try:
         repositories = await handler.get_repositories()
     except Exception as e:
@@ -243,8 +249,3 @@ async def resync_workflows(kind: str) -> list[dict[str, t.Any]]:
 
     logger.info(f"Processed total of {len(all_workflows)} workflows")
     return all_workflows
-
-
-@ocean.on_start()
-async def on_start() -> None:
-    logger.info("Starting ghoceanport integration")
