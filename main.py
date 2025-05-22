@@ -5,6 +5,7 @@ import logging
 from github.client import GithubClient
 from port_ocean.context.ocean import ocean
 from fastapi import Request
+from github.webhook import WebhookHandler
 
 # Configure logging
 logging.basicConfig(
@@ -15,6 +16,16 @@ logger = logging.getLogger(__name__)
 dotenv.load_dotenv()
 
 MAX_BATCH_SIZE = 100
+
+
+@ocean.on_start()
+async def startup() -> None:
+    # verify env vars are set
+    if not os.getenv("GITHUB_TOKEN"):
+        raise ValueError("GITHUB_TOKEN is not set.")
+    if not os.getenv("GITHUB_WEBHOOK_SECRET"):
+        # raise ValueError("GITHUB_WEBHOOK_SECRET is not set.")
+        logger.warning("GITHUB_WEBHOOK_SECRET is not set. Webhook will not be enabled/usable")
 
 
 @ocean.on_resync("Repository")
@@ -262,6 +273,6 @@ async def resync_workflows(
 
 
 @ocean.router.post("/webhook")
-async def github_webhook(request: Request) -> None:
-    # TODO: Implement webhook handling
-    pass
+async def github_webhook(request: Request) -> tuple[dict[str, t.Any], int]:
+    webhook_handler = WebhookHandler.from_env()
+    return await webhook_handler.handle_webhook(request)

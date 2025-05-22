@@ -102,7 +102,7 @@ class WebhookHandler:
             f"PR #{pr_number} ('{pr_title}'), State: '{pr_state}', Sender: '{sender_login}'"
         )
 
-    async def handle_webhook(self, request: Request) -> t.Tuple[dict[str, t.Any], int]:
+    async def handle_webhook(self, request: Request) -> tuple[dict[str, t.Any], int]:
         """
         Main handler for incoming GitHub webhook requests.
         Verifies the signature and dispatches to the appropriate event handler.
