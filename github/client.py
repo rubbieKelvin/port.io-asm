@@ -18,34 +18,15 @@ from .types import (
     GithubWorkflow,
 )
 
+from .errors import (
+    GithubError,
+    GithubRateLimitError,
+    GithubNotFoundError,
+    GithubAPIError,
+)
+
 
 logger = logging.getLogger(__name__)
-
-
-class GithubError(Exception):
-    def __init__(
-        self,
-        message: str,
-        status_code: t.Optional[int] = None,
-        response_data: t.Optional[t.Any] = None,
-    ):
-        super().__init__(message)
-        self.status_code = status_code
-        self.response_data = response_data
-
-
-class GithubRateLimitError(GithubError):
-    def __init__(self, message: str, reset_time: t.Optional[int] = None):
-        super().__init__(message)
-        self.reset_time = reset_time
-
-
-class GithubNotFoundError(GithubError):
-    pass
-
-
-class GithubAPIError(GithubError):
-    pass
 
 
 class GithubClient:
@@ -68,14 +49,17 @@ class GithubClient:
         self.base_url = base_url
         self.max_retries = max_retries
         self.backoff_factor = backoff_factor
-
-        self.base_headers = {
-            "Accept": "application/vnd.github+json",
-            "Authorization": f"Bearer {self.token}",
-            "X-GitHub-Api-Version": api_version,
-        }
+        self.api_version = api_version
 
         self.client = http_async_client
+
+    @property
+    def base_headers(self) -> t.Mapping[str, str]:
+        return {
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {self.token}",
+            "X-GitHub-Api-Version": self.api_version,
+        }
 
     @staticmethod
     def from_env(key: str = "GITHUB_TOKEN") -> "GithubClient":
