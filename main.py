@@ -4,6 +4,7 @@ import dotenv
 import logging
 from github.client import GithubClient
 from port_ocean.context.ocean import ocean
+from fastapi import Request
 
 # Configure logging
 logging.basicConfig(
@@ -55,7 +56,9 @@ async def resync_repository(
 
 
 @ocean.on_resync("PullRequest")
-async def resync_pull_requests(kind: str) -> list[dict[str, t.Any]]:
+async def resync_pull_requests(
+    kind: str,
+) -> t.AsyncGenerator[list[dict[str, t.Any]], None]:
     logger.info(f"Starting pull request resync for kind: {kind}")
 
     handler = GithubClient.from_env()
@@ -64,7 +67,7 @@ async def resync_pull_requests(kind: str) -> list[dict[str, t.Any]]:
         repositories = await handler.get_repositories()
     except Exception as e:
         logger.error(f"Failed to fetch repositories: {str(e)}")
-        return []
+        return
 
     logger.info(f"Retrieved {len(repositories)} repositories for PR sync")
     all_prs = []
@@ -115,11 +118,16 @@ async def resync_pull_requests(kind: str) -> list[dict[str, t.Any]]:
         f"Completed PR sync. Total PRs processed: {len(all_prs)} "
         f"across {len(repositories)} repositories"
     )
-    return all_prs
+
+    # Yield PRs in batches
+    for i in range(0, len(all_prs), MAX_BATCH_SIZE):
+        yield all_prs[i : i + MAX_BATCH_SIZE]
 
 
 @ocean.on_resync("Issue")
-async def resync_issues(kind: str) -> list[dict[str, t.Any]]:
+async def resync_issues(
+    kind: str,
+) -> t.AsyncGenerator[list[dict[str, t.Any]], None]:
     logger.info(f"Starting issue resync for kind: {kind}")
 
     handler = GithubClient.from_env()
@@ -128,10 +136,9 @@ async def resync_issues(kind: str) -> list[dict[str, t.Any]]:
         repositories = await handler.get_repositories()
     except Exception as e:
         logger.error(f"Failed to fetch repositories: {str(e)}")
-        return []
+        return
 
     logger.info(f"Retrieved {len(repositories)} repositories for issue sync")
-    all_issues = []
 
     for repo in repositories:
         try:
@@ -140,52 +147,53 @@ async def resync_issues(kind: str) -> list[dict[str, t.Any]]:
             issues = await handler.get_issues(owner, repo_name)
             logger.info(f"Retrieved {len(issues)} issues for {repo_name}")
 
-            all_issues.extend(
-                [
-                    {
-                        "id": str(issue["id"]),
-                        "number": issue["number"],
-                        "title": issue["title"],
-                        "state": issue["state"],
-                        "url": issue["html_url"],
-                        "created_at": issue["created_at"],
-                        "updated_at": issue["updated_at"],
-                        "repository": repo["full_name"],
-                        "author": issue["user"]["login"],
-                        "labels": [label["name"] for label in issue["labels"]],
-                        "assignees": [
-                            assignee["login"] for assignee in issue["assignees"]
-                        ],
-                    }
-                    for issue in issues
-                ]
-            )
+            # Process issues in batches
+            processed_issues = [
+                {
+                    "id": str(issue["id"]),
+                    "number": issue["number"],
+                    "title": issue["title"],
+                    "state": issue["state"],
+                    "url": issue["html_url"],
+                    "created_at": issue["created_at"],
+                    "updated_at": issue["updated_at"],
+                    "repository": repo["full_name"],
+                    "author": issue["user"]["login"],
+                    "labels": [label["name"] for label in issue["labels"]],
+                    "assignees": [assignee["login"] for assignee in issue["assignees"]],
+                }
+                for issue in issues
+            ]
+
+            # Yield issues in batches
+            for i in range(0, len(processed_issues), MAX_BATCH_SIZE):
+                yield processed_issues[i : i + MAX_BATCH_SIZE]
+
         except Exception as e:
             logger.warning(
                 f"Failed to process repository {repo.get('full_name', 'unknown')}: {str(e)}"
             )
             continue
 
-    logger.info(f"Processed total of {len(all_issues)} issues")
-    return all_issues
-
 
 @ocean.on_resync("Team")
-async def resync_teams(kind: str) -> list[dict[str, t.Any]]:
+async def resync_teams(
+    kind: str,
+) -> t.AsyncGenerator[list[dict[str, t.Any]], None]:
     logger.info(f"Starting team resync for kind: {kind}")
 
     handler = GithubClient.from_env()
     org = os.getenv("GITHUB_ORG")
     if not org:
         logger.warning("GITHUB_ORG is not set, returning empty list")
-        return []
+        return
 
     try:
         logger.info(f"Fetching teams for organization: {org}")
         teams = await handler.get_teams(org)
     except Exception as e:
         logger.error(f"Failed to fetch teams: {str(e)}")
-        return []
+        return
 
     logger.info(f"Retrieved {len(teams)} teams")
 
@@ -201,11 +209,16 @@ async def resync_teams(kind: str) -> list[dict[str, t.Any]]:
         for team in teams
     ]
     logger.info(f"Processed {len(result)} teams")
-    return result
+
+    # Yield teams in batches
+    for i in range(0, len(result), MAX_BATCH_SIZE):
+        yield result[i : i + MAX_BATCH_SIZE]
 
 
 @ocean.on_resync("Workflow")
-async def resync_workflows(kind: str) -> list[dict[str, t.Any]]:
+async def resync_workflows(
+    kind: str,
+) -> t.AsyncGenerator[list[dict[str, t.Any]], None]:
     logger.info(f"Starting workflow resync for kind: {kind}")
 
     handler = GithubClient.from_env()
@@ -214,7 +227,7 @@ async def resync_workflows(kind: str) -> list[dict[str, t.Any]]:
         repositories = await handler.get_repositories()
     except Exception as e:
         logger.error(f"Failed to fetch repositories: {str(e)}")
-        return []
+        return
 
     logger.info(f"Retrieved {len(repositories)} repositories for workflow sync")
     all_workflows = []
@@ -248,4 +261,13 @@ async def resync_workflows(kind: str) -> list[dict[str, t.Any]]:
             continue
 
     logger.info(f"Processed total of {len(all_workflows)} workflows")
-    return all_workflows
+
+    # Yield workflows in batches
+    for i in range(0, len(all_workflows), MAX_BATCH_SIZE):
+        yield all_workflows[i : i + MAX_BATCH_SIZE]
+
+
+@ocean.router.post("/webhook")
+async def github_webhook(request: Request) -> None:
+    # TODO: Implement webhook handling
+    pass
